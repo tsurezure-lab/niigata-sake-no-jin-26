@@ -376,7 +376,7 @@ function MapView({ myList, toggleMyList, toggleFavorite, updateMemo, resetToken,
     >
       {/* Header */}
       <div className="pt-3 pb-2 px-4 text-center">
-        <h1 className="text-base font-bold font-serif tracking-wider text-gray-700 flex items-center justify-center gap-2">
+        <h1 className="text-base font-bold font-serif tracking-wider text-gray-700 flex items-center justify-center gap-2 cursor-pointer active:opacity-70" onClick={resetMapZoom}>
           <svg width="24" height="24" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
             <circle cx="50" cy="50" r="45" fill="#152F83" />
             <circle cx="50" cy="50" r="30" fill="white" />
