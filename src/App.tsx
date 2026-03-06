@@ -330,9 +330,9 @@ function MapView({ myList, toggleMyList, toggleFavorite }: { myList: MyListState
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-2 px-4 pb-4">
+      <div className="flex flex-col gap-1 px-4 pb-3">
         {/* Row 1: Limited & Paid */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 items-center">
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5 items-center">
           <button
             onClick={() => setFilters(prev => ({ ...prev, limited: false, paid: false }))}
             className={`shrink-0 w-5 h-5 flex items-center justify-center rounded-full transition-opacity ${filters.limited || filters.paid ? 'opacity-80' : 'opacity-20 pointer-events-none'}`}
@@ -358,7 +358,7 @@ function MapView({ myList, toggleMyList, toggleFavorite }: { myList: MyListState
         </div>
 
         {/* Row 2: Type */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 items-center">
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5 items-center">
           <button
             onClick={() => setFilters(prev => ({ ...prev, type: [] }))}
             className={`shrink-0 w-5 h-5 flex items-center justify-center rounded-full transition-opacity ${filters.type.length > 0 ? 'opacity-80' : 'opacity-20 pointer-events-none'}`}
@@ -379,7 +379,7 @@ function MapView({ myList, toggleMyList, toggleFavorite }: { myList: MyListState
         </div>
 
         {/* Row 3: Rice */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 items-center">
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5 items-center">
           <button
             onClick={() => setFilters(prev => ({ ...prev, rice: [] }))}
             className={`shrink-0 w-5 h-5 flex items-center justify-center rounded-full transition-opacity ${filters.rice.length > 0 ? 'opacity-80' : 'opacity-20 pointer-events-none'}`}
