@@ -613,7 +613,8 @@ function MapView({ myList, toggleMyList, toggleFavorite, updateMemo, resetToken,
       </div>
 
       {/* Legend (scrollable) */}
-      <div className="flex-1 overflow-y-auto px-2 pb-24 mt-3">
+      <div className="flex-1 overflow-y-auto px-2 pb-24 mt-1">
+        <p className="text-center text-[10px] text-gray-400 mb-1">長押しで行きたいブースにマーキング出来ます</p>
         {/* Area Legend */}
         <div className="flex justify-center gap-4 mb-1 px-4">
           {[
