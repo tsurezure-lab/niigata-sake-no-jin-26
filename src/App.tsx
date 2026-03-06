@@ -507,22 +507,49 @@ function MapView({ myList, toggleMyList, toggleFavorite, resetToken }: { myList:
 
                   let longPressTimer: ReturnType<typeof setTimeout> | null = null;
                   let isLongPress = false;
-                  const handleTouchStart = () => {
-                    if (mapScale > 1.01) return;
+                  let touchStartPoint: { x: number; y: number } | null = null;
+                  const clearLongPressTimer = () => {
+                    if (longPressTimer) {
+                      clearTimeout(longPressTimer);
+                      longPressTimer = null;
+                    }
+                  };
+                  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
                     if (isPlaceholder) return;
+                    const touch = e.touches[0];
+                    touchStartPoint = { x: touch.clientX, y: touch.clientY };
                     isLongPress = false;
+                    clearLongPressTimer();
                     longPressTimer = setTimeout(() => {
                       isLongPress = true;
                       toggleMyList(String(cell.booth_number), 'want');
                     }, 500);
                   };
                   const handleTouchEnd = () => {
-                    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+                    clearLongPressTimer();
+                    touchStartPoint = null;
+                  };
+                  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+                    if (!touchStartPoint) return;
+                    const touch = e.touches[0];
+                    const moved = Math.hypot(touch.clientX - touchStartPoint.x, touch.clientY - touchStartPoint.y);
+                    if (moved > 8) {
+                      clearLongPressTimer();
+                    }
                   };
                   const handleClick = () => {
                     if (suppressTapRef.current) return;
                     if (isLongPress) { isLongPress = false; return; }
                     handleBoothClick(cell);
+                  };
+                  const handleMouseStart = () => {
+                    if (isPlaceholder) return;
+                    isLongPress = false;
+                    clearLongPressTimer();
+                    longPressTimer = setTimeout(() => {
+                      isLongPress = true;
+                      toggleMyList(String(cell.booth_number), 'want');
+                    }, 500);
                   };
 
                   return (
@@ -532,8 +559,8 @@ function MapView({ myList, toggleMyList, toggleFavorite, resetToken }: { myList:
                       onClick={handleClick}
                       onTouchStart={handleTouchStart}
                       onTouchEnd={handleTouchEnd}
-                      onTouchMove={handleTouchEnd}
-                      onMouseDown={handleTouchStart}
+                      onTouchMove={handleTouchMove}
+                      onMouseDown={handleMouseStart}
                       onMouseUp={handleTouchEnd}
                       onMouseLeave={handleTouchEnd}
                     >
@@ -924,6 +951,7 @@ function SettingsView({ myList, clearMyList }: { myList: MyListState; clearMyLis
               <li>「飲んだ！」タブで各銘柄にひとくちメモを記録可能</li>
               <li>フィルタで酒米・種類・限定酒などを絞り込み</li>
               <li>検索窓でスペース区切りのAND全文検索</li>
+              <li>Safariでうまく動作しないときはChromeで開いてみてください。</li>
             </ul>
           </div>
           <div className="border-t border-gray-200 pt-3">
