@@ -222,7 +222,7 @@ function MapView({ myList, toggleMyList, toggleFavorite }: { myList: MyListState
             onClick={() => setFilters(prev => ({ ...prev, limited: false, paid: false }))}
             className={`shrink-0 w-5 h-5 flex items-center justify-center rounded-full transition-opacity ${filters.limited || filters.paid ? 'opacity-80' : 'opacity-20 pointer-events-none'}`}
           >
-            <X className="w-3.5 h-3.5 text-gray-400" />
+            <X className="w-3.5 h-3.5 text-gray-500" />
           </button>
           <button
             onClick={toggleLimited}
@@ -248,7 +248,7 @@ function MapView({ myList, toggleMyList, toggleFavorite }: { myList: MyListState
             onClick={() => setFilters(prev => ({ ...prev, type: [] }))}
             className={`shrink-0 w-5 h-5 flex items-center justify-center rounded-full transition-opacity ${filters.type.length > 0 ? 'opacity-80' : 'opacity-20 pointer-events-none'}`}
           >
-            <X className="w-3.5 h-3.5 text-gray-400" />
+            <X className="w-3.5 h-3.5 text-gray-500" />
           </button>
           {typeOptions.map(t => (
             <button
@@ -269,7 +269,7 @@ function MapView({ myList, toggleMyList, toggleFavorite }: { myList: MyListState
             onClick={() => setFilters(prev => ({ ...prev, rice: [] }))}
             className={`shrink-0 w-5 h-5 flex items-center justify-center rounded-full transition-opacity ${filters.rice.length > 0 ? 'opacity-80' : 'opacity-20 pointer-events-none'}`}
           >
-            <X className="w-3.5 h-3.5 text-gray-400" />
+            <X className="w-3.5 h-3.5 text-gray-500" />
           </button>
           {riceOptions.map(r => (
             <button
