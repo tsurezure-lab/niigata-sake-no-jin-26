@@ -189,7 +189,7 @@ function MapView({ myList, toggleMyList, toggleFavorite }: { myList: MyListState
     <div className="flex flex-col h-full text-gray-800 overflow-hidden relative" style={{ backgroundColor: '#EEEBEA' }}>
       {/* Header */}
       <div className="pt-12 pb-3 px-4 text-center">
-        <h1 className="text-xl font-serif tracking-wider text-gray-700 flex items-center justify-center gap-2">
+        <h1 className="text-base font-bold font-serif tracking-wider text-gray-700 flex items-center justify-center gap-2">
           <svg width="24" height="24" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
             <circle cx="50" cy="50" r="45" fill="#152F83" />
             <circle cx="50" cy="50" r="30" fill="white" />
@@ -304,7 +304,7 @@ function MapView({ myList, toggleMyList, toggleFavorite }: { myList: MyListState
 
                   if (!cell) {
                     return (
-                      <React.Fragment key={`${rowIndex}-${colIndex}`}>{verticalSep}<div className="aspect-square" style={{ width: '6.5%', minWidth: '24px' }} /></React.Fragment>
+                      <React.Fragment key={`${rowIndex}-${colIndex}`}>{verticalSep}<div className="aspect-square" style={{ width: '6%', minWidth: 0 }} /></React.Fragment>
                     );
                   }
 
@@ -333,7 +333,7 @@ function MapView({ myList, toggleMyList, toggleFavorite }: { myList: MyListState
                   return (
                     <React.Fragment key={`${rowIndex}-${colIndex}`}>{verticalSep}<div
                       className={`flex flex-col items-center ${!isPlaceholder ? 'cursor-pointer' : ''} ${opacityClass} transition-opacity duration-300 select-none`}
-                      style={{ width: '6.5%', minWidth: '24px' }}
+                      style={{ width: '6%', minWidth: 0 }}
                       onClick={handleClick}
                       onTouchStart={handleTouchStart}
                       onTouchEnd={handleTouchEnd}
@@ -348,7 +348,7 @@ function MapView({ myList, toggleMyList, toggleFavorite }: { myList: MyListState
                         </span>
                       )}
                       <div
-                        className={`w-full aspect-square relative flex items-center justify-center rounded font-bold overflow-hidden p-0.5 ${isPlaceholder ? 'bg-gray-200/60 text-gray-400' : 'text-gray-900'}`}
+                        className={`w-full aspect-square relative flex items-center justify-center rounded font-bold overflow-hidden p-px ${isPlaceholder ? 'bg-gray-200/60 text-gray-400' : 'text-gray-900'}`}
                         style={!isPlaceholder ? { backgroundColor: cell.color_code, boxShadow: '0 0 3px 1px rgba(0,0,0,0.2)' } : undefined}
                       >
                         {!isPlaceholder && myList.want.has(String(cell.booth_number)) && (
@@ -837,7 +837,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="w-full h-screen flex justify-center bg-gray-300">
+    <div className="w-full flex justify-center bg-gray-300" style={{ height: '100dvh' }}>
       <div className="w-full max-w-md h-full relative flex flex-col shadow-2xl overflow-hidden" style={{ backgroundColor: '#EEEBEA' }}>
         
         {/* Main Content Area */}
