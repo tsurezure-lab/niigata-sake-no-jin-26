@@ -554,7 +554,7 @@ function MapView({ myList, toggleMyList, toggleFavorite, resetToken }: { myList:
                             <Check className="w-[70%] h-[70%] text-white" strokeWidth={3} />
                           </span>
                         )}
-                        <span className="text-center leading-[0.92] whitespace-nowrap inline-block" style={{ fontSize: 'clamp(8px, 2.8vw, 13px)' }}>
+                        <span className="text-center leading-[0.92] whitespace-nowrap inline-block" style={{ fontSize: 'clamp(7.6px, 2.66vw, 12.35px)' }}>
                           {boothLabel.line1}
                           <br />
                           {boothLabel.line2}
