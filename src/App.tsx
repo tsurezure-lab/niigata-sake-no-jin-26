@@ -39,7 +39,7 @@ const formatBreweryLabel = (name: string, isPlaceholder: boolean) => {
 
 // --- Components ---
 
-function MapView({ myList, toggleMyList, toggleFavorite, resetToken, openBoothNumber, onOpenBoothHandled }: { myList: MyListState; toggleMyList: (boothNum: string, list: 'want' | 'went') => void; toggleFavorite: (sakeKey: string) => void; resetToken: number; openBoothNumber: string | null; onOpenBoothHandled: () => void }) {
+function MapView({ myList, toggleMyList, toggleFavorite, updateMemo, resetToken, openBoothNumber, onOpenBoothHandled }: { myList: MyListState; toggleMyList: (boothNum: string, list: 'want' | 'went') => void; toggleFavorite: (sakeKey: string) => void; updateMemo: (sakeKey: string, text: string) => void; resetToken: number; openBoothNumber: string | null; onOpenBoothHandled: () => void }) {
   const [selectedBrewery, setSelectedBrewery] = useState<AppBrewery | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mapScale, setMapScale] = useState(1);
@@ -701,41 +701,55 @@ function MapView({ myList, toggleMyList, toggleFavorite, resetToken, openBoothNu
                 <div className="space-y-3">
                   {selectedBrewery.sakes.length > 0 ? (
                     selectedBrewery.sakes.map((sake) => {
+                      const sakeKey = `${selectedBrewery.boothNumber}:${sake.name}`;
+                      const isFav = myList.favorites.has(sakeKey);
                       const sakeForMatch = { isLimited: sake.rawIsLimited, isPaid: sake.rawIsPaid, name: sake.name, type: sake.rawType, company_name: sake.rawCompany, category: sake.rawCategory } as typeof sakeData[number];
                       const highlighted = isFilterActive && isSakeMatching(sakeForMatch) && isSearchMatching(sakeForMatch);
                       return (
-                      <div key={sake.id} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors ${highlighted ? 'bg-amber-100 ring-1 ring-amber-300' : ''} ${isFilterActive && !highlighted ? 'opacity-40' : ''}`}>
-                        {sake.shortType ? (
-                          <span className={`text-[10px] text-white px-2 py-1 rounded-full whitespace-nowrap min-w-[50px] text-center ${sake.typeColor}`}>
-                            {sake.shortType}
-                          </span>
-                        ) : (
-                          <span className="min-w-[50px]"></span>
-                        )}
-                        <div className="flex-1 leading-snug min-w-0">
-                          <span className="font-medium text-sm">{sake.name}</span>
-                        </div>
-                        <div className="flex gap-1 shrink-0 items-center">
-                          {sake.tags.map(tag => (
-                            <span key={tag} className={`text-[10px] text-white px-1.5 py-0.5 rounded ${tag === '限定' ? 'bg-purple-600' : 'bg-orange-600'}`}>
-                              {tag}
+                      <div key={sake.id} className={`rounded-lg px-2 py-1.5 transition-colors ${highlighted ? 'bg-amber-100 ring-1 ring-amber-300' : ''} ${isFilterActive && !highlighted ? 'opacity-40' : ''}`}>
+                        <div className="flex items-center gap-2">
+                          {sake.shortType ? (
+                            <span className={`text-[10px] text-white px-2 py-1 rounded-full whitespace-nowrap min-w-[50px] text-center ${sake.typeColor}`}>
+                              {sake.shortType}
                             </span>
-                          ))}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const key = `${selectedBrewery.boothNumber}:${sake.name}`;
-                              const isAdding = !myList.favorites.has(key);
-                              toggleFavorite(key);
-                              if (isAdding && !myList.went.has(selectedBrewery.boothNumber)) {
-                                toggleMyList(selectedBrewery.boothNumber, 'went');
-                              }
-                            }}
-                            className="p-0.5"
-                          >
-                            <Check className={`w-4 h-4 transition-colors ${myList.favorites.has(`${selectedBrewery.boothNumber}:${sake.name}`) ? 'text-emerald-500' : 'text-gray-300'}`} />
-                          </button>
+                          ) : (
+                            <span className="min-w-[50px]"></span>
+                          )}
+                          <div className="flex-1 leading-snug min-w-0">
+                            <span className="font-medium text-sm">{sake.name}</span>
+                          </div>
+                          <div className="flex gap-1 shrink-0 items-center">
+                            {sake.tags.map(tag => (
+                              <span key={tag} className={`text-[10px] text-white px-1.5 py-0.5 rounded ${tag === '限定' ? 'bg-purple-600' : 'bg-orange-600'}`}>
+                                {tag}
+                              </span>
+                            ))}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const isAdding = !isFav;
+                                toggleFavorite(sakeKey);
+                                if (isAdding && !myList.went.has(selectedBrewery.boothNumber)) {
+                                  toggleMyList(selectedBrewery.boothNumber, 'went');
+                                }
+                              }}
+                              className="p-0.5"
+                            >
+                              <Check className={`w-4 h-4 transition-colors ${isFav ? 'text-emerald-500' : 'text-gray-300'}`} />
+                            </button>
+                          </div>
                         </div>
+                        {isFav && (
+                          <div className="mt-1.5 ml-[58px]">
+                            <textarea
+                              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-700 resize-none focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 placeholder-gray-300"
+                              placeholder="ひとくちメモ…"
+                              rows={1}
+                              defaultValue={myList.memos[sakeKey] || ''}
+                              onBlur={(e) => updateMemo(sakeKey, e.target.value)}
+                            />
+                          </div>
+                        )}
                       </div>
                       );
                     })
@@ -1182,7 +1196,7 @@ export default function App() {
           <AnimatePresence mode="wait">
             {currentTab === 'map' && (
               <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
-                <MapView myList={myList} toggleMyList={toggleMyList} toggleFavorite={toggleFavorite} resetToken={mapResetToken} openBoothNumber={openBoothNumber} onOpenBoothHandled={() => setOpenBoothNumber(null)} />
+                <MapView myList={myList} toggleMyList={toggleMyList} toggleFavorite={toggleFavorite} updateMemo={updateMemo} resetToken={mapResetToken} openBoothNumber={openBoothNumber} onOpenBoothHandled={() => setOpenBoothNumber(null)} />
               </motion.div>
             )}
             {currentTab === 'list' && (
