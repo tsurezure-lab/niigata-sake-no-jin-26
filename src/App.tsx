@@ -10,6 +10,7 @@ interface MyListState {
   want: Set<string>;
   went: Set<string>;
   favorites: Set<string>; // "boothNum:sakeName" keys
+  sakeWants: Set<string>; // "boothNum:sakeName" keys — 飲んでみたい
   memos: Record<string, string>; // "boothNum:sakeName" -> memo text
 }
 
@@ -39,7 +40,7 @@ const formatBreweryLabel = (name: string, isPlaceholder: boolean) => {
 
 // --- Components ---
 
-function MapView({ myList, toggleMyList, toggleFavorite, updateMemo, resetToken, openBoothNumber, onOpenBoothHandled }: { myList: MyListState; toggleMyList: (boothNum: string, list: 'want' | 'went') => void; toggleFavorite: (sakeKey: string) => void; updateMemo: (sakeKey: string, text: string) => void; resetToken: number; openBoothNumber: string | null; onOpenBoothHandled: () => void }) {
+function MapView({ myList, toggleMyList, toggleFavorite, toggleSakeWant, updateMemo, resetToken, openBoothNumber, onOpenBoothHandled }: { myList: MyListState; toggleMyList: (boothNum: string, list: 'want' | 'went') => void; toggleFavorite: (sakeKey: string) => void; toggleSakeWant: (sakeKey: string) => void; updateMemo: (sakeKey: string, text: string) => void; resetToken: number; openBoothNumber: string | null; onOpenBoothHandled: () => void }) {
   const [selectedBrewery, setSelectedBrewery] = useState<AppBrewery | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mapScale, setMapScale] = useState(1);
@@ -727,6 +728,12 @@ function MapView({ myList, toggleMyList, toggleFavorite, updateMemo, resetToken,
                               </span>
                             ))}
                             <button
+                              onClick={(e) => { e.stopPropagation(); toggleSakeWant(sakeKey); }}
+                              className="p-0.5"
+                            >
+                              <Heart className={`w-4 h-4 transition-colors ${myList.sakeWants.has(sakeKey) ? 'text-pink-500 fill-pink-500' : 'text-gray-300'}`} />
+                            </button>
+                            <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 const isAdding = !isFav;
@@ -869,9 +876,14 @@ function MyListView({ myList, toggleMyList, onBreweryTap }: { myList: MyListStat
                 </button>
               </div>
               <div className="space-y-1.5 pl-[52px]">
-                {item.sakes.map((sake, i) => (
+                {item.sakes.map((sake, i) => {
+                  const sk = `${item.boothNumber}:${sake.name}`;
+                  return (
                   <div key={i} className="flex justify-between items-start gap-2">
-                    <span className="text-sm leading-tight font-medium">{sake.name}</span>
+                    <div className="flex items-center gap-1 min-w-0">
+                      {myList.sakeWants.has(sk) && <Heart className="w-3 h-3 text-pink-500 fill-pink-500 shrink-0" />}
+                      <span className="text-sm leading-tight font-medium">{sake.name}</span>
+                    </div>
                     <div className="flex gap-1 shrink-0">
                       {sake.tags.map(tag => (
                         <span key={tag} className={`text-[10px] text-white px-1.5 py-0.5 rounded ${tag === '限定' ? 'bg-purple-600' : 'bg-orange-600'}`}>
@@ -880,7 +892,8 @@ function MyListView({ myList, toggleMyList, onBreweryTap }: { myList: MyListStat
                       ))}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))
@@ -936,6 +949,7 @@ function FavoritesView({ myList, toggleFavorite, updateMemo }: { myList: MyListS
                   </button>
                 </div>
                 <div className="flex items-center gap-2 mt-2 pl-10">
+                  {myList.sakeWants.has(item.key) && <Heart className="w-3 h-3 text-pink-500 fill-pink-500 shrink-0" />}
                   {shortType && (
                     <span className={`text-[10px] text-white px-2 py-0.5 rounded-full whitespace-nowrap ${typeColor}`}>
                       {shortType}
@@ -965,12 +979,13 @@ function FavoritesView({ myList, toggleFavorite, updateMemo }: { myList: MyListS
   );
 }
 
-function SettingsView({ myList, clearMyList }: { myList: MyListState; clearMyList: (target: 'want' | 'went' | 'favorites') => void }) {
-  const [confirmTarget, setConfirmTarget] = useState<'want' | 'went' | 'favorites' | null>(null);
+function SettingsView({ myList, clearMyList }: { myList: MyListState; clearMyList: (target: 'want' | 'went' | 'favorites' | 'sakeWants') => void }) {
+  const [confirmTarget, setConfirmTarget] = useState<'want' | 'went' | 'favorites' | 'sakeWants' | null>(null);
 
-  const items: { key: 'want' | 'went' | 'favorites'; label: string; icon: string; count: number }[] = [
+  const items: { key: 'want' | 'went' | 'favorites' | 'sakeWants'; label: string; icon: string; count: number }[] = [
     { key: 'want', label: '行きたい！', icon: '🍶', count: myList.want.size },
     { key: 'went', label: '行った！', icon: '✅', count: myList.went.size },
+    { key: 'sakeWants', label: '飲みたい！（銘柄）', icon: '💗', count: myList.sakeWants.size },
     { key: 'favorites', label: '飲んだ！', icon: '☑️', count: myList.favorites.size },
   ];
 
@@ -1087,10 +1102,10 @@ export default function App() {
       const saved = localStorage.getItem('sakenojin-mylist');
       if (saved) {
         const parsed = JSON.parse(saved);
-        return { want: new Set(parsed.want || []), went: new Set(parsed.went || []), favorites: new Set(parsed.favorites || []), memos: parsed.memos || {} };
+        return { want: new Set(parsed.want || []), went: new Set(parsed.went || []), favorites: new Set(parsed.favorites || []), sakeWants: new Set(parsed.sakeWants || []), memos: parsed.memos || {} };
       }
     } catch {}
-    return { want: new Set<string>(), went: new Set<string>(), favorites: new Set<string>(), memos: {} as Record<string, string> };
+    return { want: new Set<string>(), went: new Set<string>(), favorites: new Set<string>(), sakeWants: new Set<string>(), memos: {} as Record<string, string> };
   });
 
   useEffect(() => {
@@ -1167,12 +1182,12 @@ export default function App() {
   }, []);
 
   const saveMyList = (next: MyListState) => {
-    localStorage.setItem('sakenojin-mylist', JSON.stringify({ want: Array.from(next.want), went: Array.from(next.went), favorites: Array.from(next.favorites), memos: next.memos }));
+    localStorage.setItem('sakenojin-mylist', JSON.stringify({ want: Array.from(next.want), went: Array.from(next.went), favorites: Array.from(next.favorites), sakeWants: Array.from(next.sakeWants), memos: next.memos }));
   };
 
   const toggleMyList = useCallback((boothNum: string, list: 'want' | 'went') => {
     setMyList(prev => {
-      const next: MyListState = { want: new Set(prev.want), went: new Set(prev.went), favorites: new Set(prev.favorites), memos: { ...prev.memos } };
+      const next: MyListState = { want: new Set(prev.want), went: new Set(prev.went), favorites: new Set(prev.favorites), sakeWants: new Set(prev.sakeWants), memos: { ...prev.memos } };
       if (next[list].has(boothNum)) {
         next[list].delete(boothNum);
       } else {
@@ -1185,7 +1200,7 @@ export default function App() {
 
   const toggleFavorite = useCallback((sakeKey: string) => {
     setMyList(prev => {
-      const next: MyListState = { want: new Set(prev.want), went: new Set(prev.went), favorites: new Set(prev.favorites), memos: { ...prev.memos } };
+      const next: MyListState = { want: new Set(prev.want), went: new Set(prev.went), favorites: new Set(prev.favorites), sakeWants: new Set(prev.sakeWants), memos: { ...prev.memos } };
       if (next.favorites.has(sakeKey)) {
         next.favorites.delete(sakeKey);
       } else {
@@ -1196,9 +1211,22 @@ export default function App() {
     });
   }, []);
 
+  const toggleSakeWant = useCallback((sakeKey: string) => {
+    setMyList(prev => {
+      const next: MyListState = { want: new Set(prev.want), went: new Set(prev.went), favorites: new Set(prev.favorites), sakeWants: new Set(prev.sakeWants), memos: { ...prev.memos } };
+      if (next.sakeWants.has(sakeKey)) {
+        next.sakeWants.delete(sakeKey);
+      } else {
+        next.sakeWants.add(sakeKey);
+      }
+      saveMyList(next);
+      return next;
+    });
+  }, []);
+
   const updateMemo = useCallback((sakeKey: string, text: string) => {
     setMyList(prev => {
-      const next: MyListState = { want: new Set(prev.want), went: new Set(prev.went), favorites: new Set(prev.favorites), memos: { ...prev.memos } };
+      const next: MyListState = { want: new Set(prev.want), went: new Set(prev.went), favorites: new Set(prev.favorites), sakeWants: new Set(prev.sakeWants), memos: { ...prev.memos } };
       if (text.trim()) {
         next.memos[sakeKey] = text;
       } else {
@@ -1209,9 +1237,9 @@ export default function App() {
     });
   }, []);
 
-  const clearMyList = useCallback((target: 'want' | 'went' | 'favorites') => {
+  const clearMyList = useCallback((target: 'want' | 'went' | 'favorites' | 'sakeWants') => {
     setMyList(prev => {
-      const next: MyListState = { want: new Set(prev.want), went: new Set(prev.went), favorites: new Set(prev.favorites), memos: { ...prev.memos } };
+      const next: MyListState = { want: new Set(prev.want), went: new Set(prev.went), favorites: new Set(prev.favorites), sakeWants: new Set(prev.sakeWants), memos: { ...prev.memos } };
       next[target] = new Set<string>();
       if (target === 'favorites') {
         next.memos = {};
@@ -1240,7 +1268,7 @@ export default function App() {
           <AnimatePresence mode="wait">
             {currentTab === 'map' && (
               <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
-                <MapView myList={myList} toggleMyList={toggleMyList} toggleFavorite={toggleFavorite} updateMemo={updateMemo} resetToken={mapResetToken} openBoothNumber={openBoothNumber} onOpenBoothHandled={() => setOpenBoothNumber(null)} />
+                <MapView myList={myList} toggleMyList={toggleMyList} toggleFavorite={toggleFavorite} toggleSakeWant={toggleSakeWant} updateMemo={updateMemo} resetToken={mapResetToken} openBoothNumber={openBoothNumber} onOpenBoothHandled={() => setOpenBoothNumber(null)} />
               </motion.div>
             )}
             {currentTab === 'list' && (
