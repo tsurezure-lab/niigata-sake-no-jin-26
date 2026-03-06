@@ -39,7 +39,7 @@ const formatBreweryLabel = (name: string, isPlaceholder: boolean) => {
 
 // --- Components ---
 
-function MapView({ myList, toggleMyList, toggleFavorite, resetToken }: { myList: MyListState; toggleMyList: (boothNum: string, list: 'want' | 'went') => void; toggleFavorite: (sakeKey: string) => void; resetToken: number }) {
+function MapView({ myList, toggleMyList, toggleFavorite, resetToken, openBoothNumber, onOpenBoothHandled }: { myList: MyListState; toggleMyList: (boothNum: string, list: 'want' | 'went') => void; toggleFavorite: (sakeKey: string) => void; resetToken: number; openBoothNumber: string | null; onOpenBoothHandled: () => void }) {
   const [selectedBrewery, setSelectedBrewery] = useState<AppBrewery | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mapScale, setMapScale] = useState(1);
@@ -197,6 +197,16 @@ function MapView({ myList, toggleMyList, toggleFavorite, resetToken }: { myList:
   useEffect(() => {
     resetMapZoom();
   }, [resetToken, resetMapZoom]);
+
+  useEffect(() => {
+    if (!openBoothNumber) return;
+    const targetNum = normalizeBooth(openBoothNumber);
+    const booth = boothData.find(b => normalizeBooth(b.booth_number) === targetNum);
+    if (booth) {
+      handleBoothClick(booth);
+    }
+    onOpenBoothHandled();
+  }, [openBoothNumber]);
 
   const getDistance = (touches: React.TouchList) => {
     if (touches.length < 2) return 0;
@@ -742,7 +752,7 @@ function MapView({ myList, toggleMyList, toggleFavorite, resetToken }: { myList:
   );
 }
 
-function MyListView({ myList, toggleMyList }: { myList: MyListState; toggleMyList: (boothNum: string, list: 'want' | 'went') => void }) {
+function MyListView({ myList, toggleMyList, onBreweryTap }: { myList: MyListState; toggleMyList: (boothNum: string, list: 'want' | 'went') => void; onBreweryTap: (boothNum: string) => void }) {
   const [activeTab, setActiveTab] = useState<'want' | 'went'>('want');
 
   const myListData = useMemo(() => {
@@ -800,7 +810,7 @@ function MyListView({ myList, toggleMyList }: { myList: MyListState; toggleMyLis
           </div>
         ) : (
           myListData.map((item) => (
-            <div key={item.id} className="bg-white rounded-xl p-4 text-gray-800 shadow-sm border border-gray-200/60">
+            <div key={item.id} className="bg-white rounded-xl p-4 text-gray-800 shadow-sm border border-gray-200/60 cursor-pointer active:bg-gray-50" onClick={() => onBreweryTap(item.boothNumber)}>
               <div className="flex items-center gap-3 mb-3">
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shadow-sm shrink-0"
@@ -814,7 +824,7 @@ function MyListView({ myList, toggleMyList }: { myList: MyListState; toggleMyLis
                 </div>
                 {activeTab === 'want' && (
                   <button
-                    onClick={() => toggleMyList(item.boothNumber, 'went')}
+                    onClick={(e) => { e.stopPropagation(); toggleMyList(item.boothNumber, 'went'); }}
                     className={`shrink-0 p-1.5 rounded-full transition-colors ${myList.went.has(item.boothNumber) ? 'bg-emerald-100' : 'hover:bg-gray-100'}`}
                     title="行った！"
                   >
@@ -822,7 +832,7 @@ function MyListView({ myList, toggleMyList }: { myList: MyListState; toggleMyLis
                   </button>
                 )}
                 <button
-                  onClick={() => toggleMyList(item.boothNumber, activeTab)}
+                  onClick={(e) => { e.stopPropagation(); toggleMyList(item.boothNumber, activeTab); }}
                   className="shrink-0 p-1.5 rounded-full hover:bg-gray-100 transition-colors"
                 >
                   <X className="w-4 h-4 text-gray-400" />
@@ -1013,6 +1023,7 @@ function SettingsView({ myList, clearMyList }: { myList: MyListState; clearMyLis
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'map' | 'list' | 'favorites' | 'settings'>('map');
   const [mapResetToken, setMapResetToken] = useState(0);
+  const [openBoothNumber, setOpenBoothNumber] = useState<string | null>(null);
   const [myList, setMyList] = useState<MyListState>(() => {
     try {
       const saved = localStorage.getItem('sakenojin-mylist');
@@ -1157,6 +1168,11 @@ export default function App() {
     setMapResetToken(prev => prev + 1);
   }, []);
 
+  const navigateToBooth = useCallback((boothNum: string) => {
+    setOpenBoothNumber(boothNum);
+    setCurrentTab('map');
+  }, []);
+
   return (
     <div className="w-full flex justify-center bg-gray-300" style={{ height: '100dvh' }}>
       <div className="w-full max-w-md h-full relative flex flex-col shadow-2xl overflow-hidden" style={{ backgroundColor: '#EEEBEA' }}>
@@ -1166,12 +1182,12 @@ export default function App() {
           <AnimatePresence mode="wait">
             {currentTab === 'map' && (
               <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
-                <MapView myList={myList} toggleMyList={toggleMyList} toggleFavorite={toggleFavorite} resetToken={mapResetToken} />
+                <MapView myList={myList} toggleMyList={toggleMyList} toggleFavorite={toggleFavorite} resetToken={mapResetToken} openBoothNumber={openBoothNumber} onOpenBoothHandled={() => setOpenBoothNumber(null)} />
               </motion.div>
             )}
             {currentTab === 'list' && (
               <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
-                <MyListView myList={myList} toggleMyList={toggleMyList} />
+                <MyListView myList={myList} toggleMyList={toggleMyList} onBreweryTap={navigateToBooth} />
               </motion.div>
             )}
             {currentTab === 'favorites' && (
