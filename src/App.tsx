@@ -1032,19 +1032,23 @@ export default function App() {
     if (new URLSearchParams(window.location.search).get('no_analytics') === '1') return;
     if (document.querySelector('script[data-analytics-loader="true"]')) return;
 
-    // Improve campaign analysis without cookies by normalizing UTM campaign into the path.
-    // Example: "/?utm_campaign=opening-day" -> "/c/opening-day"
+    // Improve source analysis without cookies by normalizing referrer source into the path.
+    // Example: "/?utm_source=line" -> "/s/line"
     const url = new URL(window.location.href);
-    const campaignRaw = url.searchParams.get('utm_campaign') || url.searchParams.get('campaign');
-    if (campaignRaw && (url.pathname === '/' || url.pathname === '/index.html')) {
-      const campaign = campaignRaw
+    const sourceRaw =
+      url.searchParams.get('utm_source') ||
+      url.searchParams.get('source') ||
+      url.searchParams.get('utm_campaign') ||
+      url.searchParams.get('campaign');
+    if (sourceRaw && (url.pathname === '/' || url.pathname === '/index.html')) {
+      const source = sourceRaw
         .toLowerCase()
         .replace(/[^a-z0-9-_]/g, '-')
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '')
         .slice(0, 64);
-      if (campaign) {
-        const nextUrl = `/c/${campaign}${url.hash}`;
+      if (source) {
+        const nextUrl = `/s/${source}${url.hash}`;
         window.history.replaceState({}, '', nextUrl);
       }
     }
