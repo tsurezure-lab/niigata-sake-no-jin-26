@@ -401,10 +401,10 @@ function MapView({ myList, toggleMyList, toggleFavorite }: { myList: MyListState
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="flex-1 overflow-y-auto px-2 pb-24">
+      {/* Grid (fixed viewport) */}
+      <div className="px-2">
         <div
-          className="overflow-hidden rounded-xl border border-gray-200/80 bg-white/30"
+          className="overflow-hidden rounded-xl border border-gray-200/80 bg-white/30 h-[44vh] min-h-[280px] max-h-[420px]"
           onTouchStart={handleMapTouchStart}
           onTouchMove={handleMapTouchMove}
           onTouchEnd={handleMapTouchEnd}
@@ -511,9 +511,12 @@ function MapView({ myList, toggleMyList, toggleFavorite }: { myList: MyListState
           ))}
           </div>
         </div>
+      </div>
 
+      {/* Legend + Info (scrollable) */}
+      <div className="flex-1 overflow-y-auto px-2 pb-24 mt-3">
         {/* Area Legend */}
-        <div className="flex justify-center gap-4 mt-3 mb-1 px-4">
+        <div className="flex justify-center gap-4 mb-1 px-4">
           {[
             { area: '上越', color: '#d3dbe3' },
             { area: '中越', color: '#d4e4c9' },
