@@ -1166,7 +1166,7 @@ function MyListView({ myList, toggleMyList, onBreweryTap, groupMembers, activeGr
   );
 }
 
-function FavoritesView({ myList, toggleFavorite, updateMemo }: { myList: MyListState; toggleFavorite: (sakeKey: string) => void; updateMemo: (sakeKey: string, text: string) => void }) {
+function FavoritesView({ myList, toggleFavorite, updateMemo, groupMembers, activeGroupId, onBreweryTap }: { myList: MyListState; toggleFavorite: (sakeKey: string) => void; updateMemo: (sakeKey: string, text: string) => void; groupMembers: GroupMember[]; activeGroupId: string | null; onBreweryTap: (boothNum: string) => void }) {
   const favoriteItems = useMemo(() => {
     return Array.from(myList.favorites).map(key => {
       const [boothNum, ...nameParts] = key.split(':');
@@ -1236,6 +1236,70 @@ function FavoritesView({ myList, toggleFavorite, updateMemo }: { myList: MyListS
               </div>
             );
           })
+        )}
+
+        {/* Group members' favorites */}
+        {activeGroupId && groupMembers.length > 0 && (
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-gray-300"></div>
+              <span className="text-xs text-gray-500 font-medium shrink-0">メンバーの飲んだリスト</span>
+              <div className="h-px flex-1 bg-gray-300"></div>
+            </div>
+            {groupMembers.map((member, memberIdx) => {
+              const memberWentData = (member.went || []).map(boothNum => {
+                const targetBoothNum = normalizeBooth(boothNum);
+                const boothInfo = boothData.find(b => normalizeBooth(b.booth_number) === targetBoothNum);
+                if (!boothInfo) return null;
+                return {
+                  boothNumber: String(boothInfo.booth_number),
+                  name: boothInfo.brewery_name || '',
+                  color: boothInfo.color_code || '#cccccc',
+                };
+              }).filter((x): x is NonNullable<typeof x> => x !== null);
+
+              const color = memberColors[memberIdx % memberColors.length];
+
+              return (
+                <div key={member.id} className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: color }}>
+                      {member.name.charAt(0)}
+                    </div>
+                    <span className="text-sm font-bold text-gray-700">{member.name}</span>
+                    <span className="text-xs text-gray-400">({memberWentData.length}蔵)</span>
+                  </div>
+                  {memberWentData.length === 0 ? (
+                    <p className="text-xs text-gray-400 pl-8">まだ飲んでいません</p>
+                  ) : (
+                    <div className="space-y-1.5 pl-8">
+                      {memberWentData.map((booth) => {
+                        const memo = member.memos?.[`booth:${booth.boothNumber}`];
+                        return (
+                          <button
+                            key={booth.boothNumber}
+                            className="flex items-center gap-1.5 bg-white rounded-lg px-2.5 py-1.5 shadow-sm border border-gray-200/60 active:bg-gray-50 w-full text-left"
+                            onClick={() => onBreweryTap(booth.boothNumber)}
+                          >
+                            <div
+                              className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0"
+                              style={{ backgroundColor: booth.color }}
+                            >
+                              {booth.boothNumber}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-xs font-medium text-gray-700">{booth.name}</span>
+                              {memo && <p className="text-[10px] text-gray-400 truncate">{memo}</p>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
@@ -1907,7 +1971,7 @@ export default function App() {
             )}
             {currentTab === 'favorites' && (
               <motion.div key="favorites" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
-                <FavoritesView myList={myList} toggleFavorite={toggleFavorite} updateMemo={updateMemo} />
+                <FavoritesView myList={myList} toggleFavorite={toggleFavorite} updateMemo={updateMemo} groupMembers={groupMembers} activeGroupId={activeGroupId} onBreweryTap={navigateToBooth} />
               </motion.div>
             )}
             {currentTab === 'group' && (
