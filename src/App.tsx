@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Search, Map as MapIcon, List, X, Heart, Check, Settings, Trash2, Send, Users, Copy, UserPlus, Download, Upload } from 'lucide-react';
+import { Search, Map as MapIcon, List, X, Heart, Check, Settings, Trash2, Send, Users, Copy, UserPlus, LogIn, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { boothData, sakeData, AppBrewery, AppSake } from './data';
+import { syncMyDataToGroup, subscribeToGroup, leaveGroup, getMyMemberId, isFirebaseConfigured, type FirebaseGroupMember } from './firebase';
 
 // --- Types ---
 type Tag = '限定' | '有料' | '無料' | '新酒';
@@ -61,34 +62,6 @@ const decodeShareCode = (code: string): string[] => {
     return nums;
   } catch {
     return [];
-  }
-};
-
-const encodeGroupCode = (members: GroupMember[], myName: string, myWants: Set<string>): string => {
-  const allMembers = [
-    { name: myName || 'わたし', wants: Array.from(myWants).map(Number).filter(n => n >= 1 && n <= 82).sort((a, b) => a - b) },
-    ...members.map(m => ({ name: m.name, wants: m.wants.map(Number).filter(n => n >= 1 && n <= 82).sort((a, b) => a - b) }))
-  ];
-  const json = JSON.stringify(allMembers);
-  return 'G1:' + btoa(unescape(encodeURIComponent(json))).replace(/=+$/, '');
-};
-
-const decodeGroupCode = (code: string): { name: string; wants: string[] }[] | null => {
-  try {
-    if (!code.startsWith('G1:')) return null;
-    const base64 = code.slice(3);
-    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
-    const json = decodeURIComponent(escape(atob(padded)));
-    const parsed = JSON.parse(json);
-    if (!Array.isArray(parsed) || parsed.length === 0) return null;
-    return parsed.filter((m: { name?: string; wants?: number[] }) =>
-      m && typeof m.name === 'string' && Array.isArray(m.wants)
-    ).map((m: { name: string; wants: number[] }) => ({
-      name: m.name,
-      wants: m.wants.map(String).filter(s => { const n = Number(s); return n >= 1 && n <= 82; })
-    }));
-  } catch {
-    return null;
   }
 };
 
@@ -1194,31 +1167,14 @@ function SettingsView({ myList, clearMyList }: { myList: MyListState; clearMyLis
   );
 }
 
-function GroupView({ myList, groupMembers, addGroupMember, removeGroupMember, importGroup }: { myList: MyListState; groupMembers: GroupMember[]; addGroupMember: (name: string, code: string) => boolean; removeGroupMember: (id: string) => void; importGroup: (code: string) => boolean }) {
-  const [memberName, setMemberName] = useState('');
-  const [memberCode, setMemberCode] = useState('');
-  const [copyFeedback, setCopyFeedback] = useState(false);
-  const [copyGroupFeedback, setCopyGroupFeedback] = useState(false);
+function GroupView({ myList, groupMembers, activeGroupId, myName, joinGroup, leaveGroup: handleLeave, setMyName }: { myList: MyListState; groupMembers: GroupMember[]; activeGroupId: string | null; myName: string; joinGroup: (groupId: string, name: string) => boolean; leaveGroup: () => void; setMyName: (name: string) => void }) {
+  const [inputGroupId, setInputGroupId] = useState('');
+  const [inputName, setInputName] = useState(myName);
   const [error, setError] = useState('');
-  const [groupImportCode, setGroupImportCode] = useState('');
-  const [importError, setImportError] = useState('');
-  const [importSuccess, setImportSuccess] = useState(false);
-  const [myName, setMyName] = useState(() => {
-    try { return localStorage.getItem('sakenojin-myname') || ''; } catch { return ''; }
-  });
+  const [copyFeedback, setCopyFeedback] = useState(false);
+  const firebaseReady = useMemo(() => isFirebaseConfigured(), []);
 
-  const myCode = useMemo(() => encodeShareCode(myList.want), [myList.want]);
-
-  const groupCode = useMemo(() => {
-    if (groupMembers.length === 0 && myList.want.size === 0) return '';
-    return encodeGroupCode(groupMembers, myName, myList.want);
-  }, [groupMembers, myList.want, myName]);
-
-  const savedGroupId = useMemo(() => {
-    try { return localStorage.getItem('sakenojin-group-id') || ''; } catch { return ''; }
-  }, []);
-
-  const handleCopy = async (text: string, setFeedback: (v: boolean) => void) => {
+  const handleCopy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -1231,203 +1187,155 @@ function GroupView({ myList, groupMembers, addGroupMember, removeGroupMember, im
       document.execCommand('copy');
       document.body.removeChild(ta);
     }
-    setFeedback(true);
-    setTimeout(() => setFeedback(false), 2000);
+    setCopyFeedback(true);
+    setTimeout(() => setCopyFeedback(false), 2000);
   };
 
-  const handleAddMember = () => {
+  const handleJoin = () => {
     setError('');
-    if (!memberName.trim()) { setError('名前を入力してください'); return; }
-    if (!memberCode.trim()) { setError('共有コードを入力してください'); return; }
-    const success = addGroupMember(memberName.trim(), memberCode.trim());
+    if (!inputName.trim()) { setError('名前を入力してください'); return; }
+    if (!inputGroupId.trim()) { setError('グループIDを入力してください'); return; }
+    const success = joinGroup(inputGroupId.trim(), inputName.trim());
     if (success) {
-      setMemberName('');
-      setMemberCode('');
+      setInputGroupId('');
     } else {
-      setError('無効な共有コードです');
+      setError('グループIDが無効です（英数字・ハイフン・アンダースコアのみ）');
     }
-  };
-
-  const handleImportGroup = () => {
-    setImportError('');
-    setImportSuccess(false);
-    if (!groupImportCode.trim()) { setImportError('グループIDを入力してください'); return; }
-    const success = importGroup(groupImportCode.trim());
-    if (success) {
-      setGroupImportCode('');
-      setImportSuccess(true);
-      setTimeout(() => setImportSuccess(false), 3000);
-    } else {
-      setImportError('無効なグループIDです');
-    }
-  };
-
-  const handleMyNameChange = (name: string) => {
-    setMyName(name);
-    try { localStorage.setItem('sakenojin-myname', name); } catch {}
   };
 
   return (
     <div className="flex flex-col h-full text-gray-800 overflow-hidden" style={{ backgroundColor: '#EEEBEA' }}>
       <div className="pt-12 pb-4 px-4 text-center">
         <h1 className="text-xl font-bold text-gray-700">グループ共有</h1>
-        <p className="text-xs text-gray-400 mt-1">行きたい酒蔵をグループで共有</p>
+        <p className="text-xs text-gray-400 mt-1">リアルタイムで行きたい酒蔵を共有</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-4">
-        {/* Import group by ID */}
-        <div className="bg-white rounded-xl px-4 py-4 shadow-sm border border-blue-200/60">
-          <p className="text-sm font-bold text-blue-600 mb-2"><Download className="w-4 h-4 inline -mt-0.5 mr-1" />グループIDで参加</p>
-          <p className="text-[10px] text-gray-400 mb-2">友達から受け取ったグループIDを入力してグループに参加できます</p>
-          <div className="space-y-2">
-            <input
-              type="text"
-              placeholder="グループIDを貼り付け"
-              value={groupImportCode}
-              onChange={e => setGroupImportCode(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
-            />
-            {importError && <p className="text-xs text-red-500">{importError}</p>}
-            {importSuccess && <p className="text-xs text-emerald-600">グループを読み込みました！</p>}
-            <button
-              onClick={handleImportGroup}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-blue-600 text-white active:bg-blue-700 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              グループを読み込む
-            </button>
+        {!firebaseReady && (
+          <div className="bg-red-50 rounded-xl px-4 py-3 border border-red-200">
+            <p className="text-xs text-red-600 font-bold">Firebase未設定</p>
+            <p className="text-[10px] text-red-500 mt-1">src/firebase.ts にFirebaseの設定情報を入力してください。</p>
           </div>
-          {savedGroupId && (
-            <p className="text-[10px] text-emerald-600 mt-2">前回のグループが保存されています</p>
-          )}
-        </div>
+        )}
 
-        {/* Group export code */}
-        <div className="bg-white rounded-xl px-4 py-4 shadow-sm border border-amber-200/60">
-          <p className="text-sm font-bold text-amber-700 mb-2"><Upload className="w-4 h-4 inline -mt-0.5 mr-1" />グループIDを作成・共有</p>
-          <p className="text-[10px] text-gray-400 mb-2">あなたの「行きたい！」と追加済みメンバーをまとめた1つのIDを生成します。友達に送って共有しましょう。</p>
-          <div className="space-y-2">
-            <input
-              type="text"
-              placeholder="あなたの名前（例：太郎）"
-              value={myName}
-              onChange={e => handleMyNameChange(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 placeholder-gray-300"
-            />
-          </div>
-          {groupCode ? (
-            <>
-              <div className="mt-2 bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-600 font-mono break-all select-all max-h-20 overflow-y-auto">
-                {groupCode}
+        {activeGroupId ? (
+          <>
+            {/* Connected state */}
+            <div className="bg-emerald-50 rounded-xl px-4 py-4 shadow-sm border border-emerald-200/60">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <p className="text-sm font-bold text-emerald-700">グループに接続中</p>
               </div>
-              <p className="text-[10px] text-gray-400 mt-1">
-                あなた（{myList.want.size}蔵）{groupMembers.length > 0 ? ` + ${groupMembers.length}人のメンバー` : ''}の情報が含まれます
-              </p>
-              <button
-                onClick={() => handleCopy(groupCode, setCopyGroupFeedback)}
-                className={`mt-2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg text-white transition-colors ${copyGroupFeedback ? 'bg-emerald-500' : 'bg-amber-600 active:bg-amber-700'}`}
-              >
-                <Copy className="w-3.5 h-3.5" />
-                {copyGroupFeedback ? 'コピーしました！' : 'グループIDをコピー'}
-              </button>
-            </>
-          ) : (
-            <p className="text-xs text-gray-400 mt-2">マップから「行きたい！」を追加するとグループIDが生成されます</p>
-          )}
-        </div>
-
-        {/* My individual share code */}
-        <div className="bg-white rounded-xl px-4 py-4 shadow-sm border border-gray-200/60">
-          <p className="text-sm font-bold text-gray-600 mb-2">あなたの個人共有コード</p>
-          {myList.want.size > 0 ? (
-            <>
-              <div className="bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-600 font-mono break-all select-all">
-                {myCode}
-              </div>
-              <p className="text-[10px] text-gray-400 mt-1">行きたい！（{myList.want.size}蔵）の情報が含まれます</p>
-              <button
-                onClick={() => handleCopy(myCode, setCopyFeedback)}
-                className={`mt-2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg text-white transition-colors ${copyFeedback ? 'bg-emerald-500' : 'bg-amber-600 active:bg-amber-700'}`}
-              >
-                <Copy className="w-3.5 h-3.5" />
-                {copyFeedback ? 'コピーしました！' : 'コードをコピー'}
-              </button>
-            </>
-          ) : (
-            <p className="text-xs text-gray-400">マップから「行きたい！」を追加するとコードが生成されます</p>
-          )}
-        </div>
-
-        {/* Add member */}
-        <div className="bg-white rounded-xl px-4 py-4 shadow-sm border border-gray-200/60">
-          <p className="text-sm font-bold text-gray-600 mb-2">メンバーを個別に追加</p>
-          <div className="space-y-2">
-            <input
-              type="text"
-              placeholder="名前（例：田中さん）"
-              value={memberName}
-              onChange={e => setMemberName(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 placeholder-gray-300"
-            />
-            <input
-              type="text"
-              placeholder="個人共有コードを貼り付け"
-              value={memberCode}
-              onChange={e => setMemberCode(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 placeholder-gray-300"
-            />
-            {error && <p className="text-xs text-red-500">{error}</p>}
-            <button
-              onClick={handleAddMember}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-blue-600 text-white active:bg-blue-700 transition-colors"
-            >
-              <UserPlus className="w-4 h-4" />
-              追加
-            </button>
-          </div>
-        </div>
-
-        {/* Member list */}
-        {groupMembers.length > 0 && (
-          <div>
-            <p className="text-xs text-gray-500 px-1 mb-2">メンバー一覧（{groupMembers.length}人）</p>
-            <div className="space-y-2">
-              {groupMembers.map((member, index) => (
-                <div key={member.id} className="bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-200/60 flex items-center gap-3">
-                  <span
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                    style={{ backgroundColor: memberColors[index % memberColors.length] }}
-                  >
-                    {Array.from(member.name)[0]}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{member.name}</p>
-                    <p className="text-[10px] text-gray-400">{member.wants.length}蔵</p>
-                  </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-500 w-16 shrink-0">グループID</span>
+                  <span className="bg-white rounded px-2 py-0.5 text-xs font-mono text-gray-700 flex-1 select-all">{activeGroupId}</span>
                   <button
-                    onClick={() => removeGroupMember(member.id)}
-                    className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+                    onClick={() => handleCopy(activeGroupId)}
+                    className={`px-2 py-0.5 text-[10px] rounded transition-colors ${copyFeedback ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-600 active:bg-gray-200'}`}
                   >
-                    <X className="w-4 h-4 text-gray-400" />
+                    {copyFeedback ? 'OK!' : 'コピー'}
                   </button>
                 </div>
-              ))}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-500 w-16 shrink-0">あなた</span>
+                  <span className="text-xs text-gray-700">{myName}（{myList.want.size}蔵）</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <input
+                  type="text"
+                  placeholder="名前を変更"
+                  value={inputName}
+                  onChange={e => setInputName(e.target.value)}
+                  onBlur={() => { if (inputName.trim() && inputName.trim() !== myName) setMyName(inputName.trim()); }}
+                  className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 placeholder-gray-300"
+                />
+                <button
+                  onClick={handleLeave}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 active:bg-red-200 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  退出
+                </button>
+              </div>
             </div>
-          </div>
+
+            {/* Member list */}
+            <div>
+              <p className="text-xs text-gray-500 px-1 mb-2">メンバー（{groupMembers.length}人）</p>
+              {groupMembers.length > 0 ? (
+                <div className="space-y-2">
+                  {groupMembers.map((member, index) => (
+                    <div key={member.id} className="bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-200/60 flex items-center gap-3">
+                      <span
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                        style={{ backgroundColor: memberColors[index % memberColors.length] }}
+                      >
+                        {Array.from(member.name)[0]}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{member.name}</p>
+                        <p className="text-[10px] text-gray-400">{member.wants.length}蔵</p>
+                      </div>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400" title="オンライン" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white/70 rounded-xl px-4 py-6 text-center border border-gray-200/60">
+                  <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-xs text-gray-400">まだ他のメンバーがいません</p>
+                  <p className="text-[10px] text-gray-300 mt-1">グループIDを友達に共有しましょう</p>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Join or create group */}
+            <div className="bg-white rounded-xl px-4 py-4 shadow-sm border border-blue-200/60">
+              <p className="text-sm font-bold text-blue-600 mb-2"><LogIn className="w-4 h-4 inline -mt-0.5 mr-1" />グループに参加 / 作成</p>
+              <p className="text-[10px] text-gray-400 mb-3">グループIDを入力して参加するか、新しいIDを決めてグループを作成できます。同じIDを入力した人同士で「行きたい！」がリアルタイムに共有されます。</p>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  placeholder="あなたの名前（例：太郎）"
+                  value={inputName}
+                  onChange={e => setInputName(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+                />
+                <input
+                  type="text"
+                  placeholder="グループID（例：sake-friends-2026）"
+                  value={inputGroupId}
+                  onChange={e => setInputGroupId(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+                />
+                {error && <p className="text-xs text-red-500">{error}</p>}
+                <button
+                  onClick={handleJoin}
+                  disabled={!firebaseReady}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-blue-600 text-white active:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <LogIn className="w-4 h-4" />
+                  グループに参加
+                </button>
+              </div>
+            </div>
+          </>
         )}
 
         {/* How to use */}
         <div className="px-4 py-3 bg-white/70 rounded-xl text-gray-500 text-xs leading-relaxed border border-gray-200/60">
           <p className="font-bold text-gray-600 mb-1">使い方</p>
           <ol className="list-decimal pl-4 space-y-1">
-            <li>マップで「行きたい！」蔵を登録する</li>
-            <li>「グループIDを作成・共有」から自分の名前を入力し、グループIDをコピーして友達に送る</li>
-            <li>友達のグループIDを「グループIDで参加」に貼り付けて読み込む</li>
+            <li>名前を入力し、グループID（好きな英数字）を決めてグループに参加</li>
+            <li>同じグループIDを友達に伝える</li>
+            <li>友達も同じグループIDで参加すると、リアルタイムで「行きたい！」が共有されます</li>
             <li>マップ上にメンバーの行きたい蔵が <Users className="w-3 h-3 text-blue-500 inline -mt-0.5" /> で表示されます</li>
-            <li>グループは自動保存されるので、次回以降の入力は不要です</li>
+            <li>グループIDは自動保存されるので、次回以降の入力は不要です</li>
           </ol>
-          <p className="font-bold text-gray-600 mt-3 mb-1">個別追加</p>
-          <p>友達の個人共有コードを使って1人ずつ追加することもできます。</p>
         </div>
       </div>
     </div>
@@ -1458,42 +1366,66 @@ export default function App() {
     return [];
   });
 
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(() => {
+    try { return localStorage.getItem('sakenojin-group-id') || null; } catch { return null; }
+  });
+
+  const [myName, setMyNameState] = useState(() => {
+    try { return localStorage.getItem('sakenojin-myname') || ''; } catch { return ''; }
+  });
+
+  const myMemberId = useMemo(() => getMyMemberId(), []);
+
   const saveGroup = (members: GroupMember[]) => {
     localStorage.setItem('sakenojin-group', JSON.stringify(members));
   };
 
-  const addGroupMember = useCallback((name: string, code: string): boolean => {
-    const wants = decodeShareCode(code);
-    if (wants.length === 0) return false;
-    setGroupMembers(prev => {
-      const next = [...prev, { id: `g-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, name, wants }];
-      saveGroup(next);
-      return next;
-    });
-    return true;
-  }, []);
+  // Sync my wants to Firebase when they change (if in a group)
+  useEffect(() => {
+    if (!activeGroupId || !myName || !isFirebaseConfigured()) return;
+    syncMyDataToGroup(activeGroupId, myMemberId, myName, Array.from(myList.want)).catch(() => {});
+  }, [activeGroupId, myMemberId, myName, myList.want]);
 
-  const removeGroupMember = useCallback((id: string) => {
-    setGroupMembers(prev => {
-      const next = prev.filter(m => m.id !== id);
-      saveGroup(next);
-      return next;
+  // Subscribe to Firebase group updates
+  useEffect(() => {
+    if (!activeGroupId || !isFirebaseConfigured()) return;
+    const unsubscribe = subscribeToGroup(activeGroupId, (members) => {
+      const otherMembers: GroupMember[] = Object.entries(members)
+        .filter(([id]) => id !== myMemberId)
+        .map(([id, data]) => ({
+          id,
+          name: (data as FirebaseGroupMember).name,
+          wants: (data as FirebaseGroupMember).wants || []
+        }));
+      setGroupMembers(otherMembers);
+      saveGroup(otherMembers);
     });
-  }, []);
+    return unsubscribe;
+  }, [activeGroupId, myMemberId]);
 
-  const importGroup = useCallback((code: string): boolean => {
-    const members = decodeGroupCode(code);
-    if (!members || members.length === 0) return false;
-    const newMembers: GroupMember[] = members.map((m, i) => ({
-      id: `g-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-      name: m.name,
-      wants: m.wants
-    }));
-    setGroupMembers(newMembers);
-    saveGroup(newMembers);
-    try { localStorage.setItem('sakenojin-group-id', code); } catch {}
+  const joinGroup = useCallback((groupId: string, name: string): boolean => {
+    if (!groupId.trim() || !name.trim()) return false;
+    if (!isFirebaseConfigured()) return false;
+    const cleanId = groupId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (!cleanId) return false;
+    setActiveGroupId(cleanId);
+    setMyNameState(name.trim());
+    localStorage.setItem('sakenojin-group-id', cleanId);
+    localStorage.setItem('sakenojin-myname', name.trim());
+    // Initial sync
+    syncMyDataToGroup(cleanId, myMemberId, name.trim(), Array.from(myList.want)).catch(() => {});
     return true;
-  }, []);
+  }, [myMemberId, myList.want]);
+
+  const handleLeaveGroup = useCallback(() => {
+    if (activeGroupId && isFirebaseConfigured()) {
+      leaveGroup(activeGroupId, myMemberId).catch(() => {});
+    }
+    setActiveGroupId(null);
+    setGroupMembers([]);
+    localStorage.removeItem('sakenojin-group-id');
+    saveGroup([]);
+  }, [activeGroupId, myMemberId]);
 
   useEffect(() => {
     const getMeta = (name: string) => document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`)?.content?.trim() ?? '';
@@ -1670,7 +1602,7 @@ export default function App() {
             )}
             {currentTab === 'group' && (
               <motion.div key="group" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
-                <GroupView myList={myList} groupMembers={groupMembers} addGroupMember={addGroupMember} removeGroupMember={removeGroupMember} importGroup={importGroup} />
+                <GroupView myList={myList} groupMembers={groupMembers} activeGroupId={activeGroupId} myName={myName} joinGroup={joinGroup} leaveGroup={handleLeaveGroup} setMyName={(name: string) => { setMyNameState(name); localStorage.setItem('sakenojin-myname', name); }} />
               </motion.div>
             )}
             {currentTab === 'settings' && (
