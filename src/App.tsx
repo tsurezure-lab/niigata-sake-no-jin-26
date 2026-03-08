@@ -26,6 +26,7 @@ interface GroupMember {
   id: string;
   name: string;
   wants: string[]; // booth numbers
+  memos?: Record<string, string>;
 }
 
 const memberColors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#F97316'];
@@ -860,6 +861,19 @@ function MapView({ myList, toggleMyList, toggleFavorite, toggleSakeWant, updateM
                     <Send className="w-3.5 h-3.5" />
                   </button>
                 </div>
+                {/* Other members' memos for this booth */}
+                {groupMembers.filter(m => m.memos?.[`booth:${selectedBrewery.boothNumber}`]).length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {groupMembers.filter(m => m.memos?.[`booth:${selectedBrewery.boothNumber}`]).map((m, i) => (
+                      <div key={m.id} className="flex items-start gap-1.5">
+                        <span className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold shrink-0 mt-0.5" style={{ backgroundColor: memberColors[groupMembers.indexOf(m) % memberColors.length] }}>
+                          {m.name.charAt(0)}
+                        </span>
+                        <p className="text-[11px] text-gray-500"><span className="font-medium text-gray-600">{m.name}:</span> {m.memos![`booth:${selectedBrewery.boothNumber}`]}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           </>
@@ -1024,22 +1038,28 @@ function MyListView({ myList, toggleMyList, onBreweryTap, groupMembers, activeGr
                   {memberBoothData.length === 0 ? (
                     <p className="text-xs text-gray-400 pl-8">まだリストがありません</p>
                   ) : (
-                    <div className="flex flex-wrap gap-2 pl-8">
-                      {memberBoothData.map((booth) => (
-                        <button
-                          key={booth.boothNumber}
-                          className="flex items-center gap-1.5 bg-white rounded-lg px-2.5 py-1.5 shadow-sm border border-gray-200/60 active:bg-gray-50"
-                          onClick={() => onBreweryTap(booth.boothNumber)}
-                        >
-                          <div
-                            className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0"
-                            style={{ backgroundColor: booth.color }}
+                    <div className="space-y-1.5 pl-8">
+                      {memberBoothData.map((booth) => {
+                        const memo = member.memos?.[`booth:${booth.boothNumber}`];
+                        return (
+                          <button
+                            key={booth.boothNumber}
+                            className="flex items-center gap-1.5 bg-white rounded-lg px-2.5 py-1.5 shadow-sm border border-gray-200/60 active:bg-gray-50 w-full text-left"
+                            onClick={() => onBreweryTap(booth.boothNumber)}
                           >
-                            {booth.boothNumber}
-                          </div>
-                          <span className="text-xs font-medium text-gray-700">{booth.name}</span>
-                        </button>
-                      ))}
+                            <div
+                              className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0"
+                              style={{ backgroundColor: booth.color }}
+                            >
+                              {booth.boothNumber}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-xs font-medium text-gray-700">{booth.name}</span>
+                              {memo && <p className="text-[10px] text-gray-400 truncate">{memo}</p>}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1507,29 +1527,66 @@ export default function App() {
     return subscribeToConnectionState(setConnectionStatus);
   }, []);
 
-  // Sync my wants to Firebase when they change (if in a group)
+  // Sync all my data to Firebase when they change (if in a group)
   useEffect(() => {
     if (!activeGroupId || !myName || !isFirebaseConfigured()) return;
     setSyncError(null);
-    syncMyDataToGroup(activeGroupId, myMemberId, myName, Array.from(myList.want)).then(() => {
+    syncMyDataToGroup(activeGroupId, myMemberId, myName, {
+      wants: Array.from(myList.want),
+      went: Array.from(myList.went),
+      favorites: Array.from(myList.favorites),
+      sakeWants: Array.from(myList.sakeWants),
+      memos: myList.memos,
+    }).then(() => {
       setupOnDisconnect(activeGroupId, myMemberId);
     }).catch((err) => {
       setSyncError('データの同期に失敗しました: ' + (err?.message || '不明なエラー'));
     });
-  }, [activeGroupId, myMemberId, myName, myList.want]);
+  }, [activeGroupId, myMemberId, myName, myList]);
 
-  // Subscribe to Firebase group updates
+  // Subscribe to Firebase group updates + restore own data if local is empty
+  const hasRestoredRef = useRef(false);
   useEffect(() => {
     if (!activeGroupId || !isFirebaseConfigured()) return;
+    hasRestoredRef.current = false;
     setSyncError(null);
     const unsubscribe = subscribeToGroup(activeGroupId, (members) => {
       setSyncError(null);
+
+      // Restore own data from Firebase if local data is empty (e.g. new device / cleared cache)
+      if (!hasRestoredRef.current) {
+        hasRestoredRef.current = true;
+        const myData = members[myMemberId] as FirebaseGroupMember | undefined;
+        if (myData) {
+          setMyList(prev => {
+            // Only restore if local is mostly empty (no wants and no went)
+            if (prev.want.size > 0 || prev.went.size > 0) return prev;
+            const restored: MyListState = {
+              want: new Set(myData.wants || []),
+              went: new Set(myData.went || []),
+              favorites: new Set(myData.favorites || []),
+              sakeWants: new Set(myData.sakeWants || []),
+              memos: myData.memos || {},
+            };
+            localStorage.setItem('sakenojin-mylist', JSON.stringify({
+              want: Array.from(restored.want),
+              went: Array.from(restored.went),
+              favorites: Array.from(restored.favorites),
+              sakeWants: Array.from(restored.sakeWants),
+              memos: restored.memos,
+            }));
+            return restored;
+          });
+        }
+      }
+
       const otherMembers: GroupMember[] = Object.entries(members)
         .filter(([id]) => id !== myMemberId)
         .map(([id, data]) => ({
           id,
           name: (data as FirebaseGroupMember).name,
-          wants: (data as FirebaseGroupMember).wants || []
+          wants: (data as FirebaseGroupMember).wants || [],
+          memos: (data as FirebaseGroupMember).memos || {},
         }));
       setGroupMembers(otherMembers);
       saveGroup(otherMembers);
@@ -1549,9 +1606,15 @@ export default function App() {
     localStorage.setItem('sakenojin-group-id', cleanId);
     localStorage.setItem('sakenojin-myname', name.trim());
     // Initial sync
-    syncMyDataToGroup(cleanId, myMemberId, name.trim(), Array.from(myList.want)).catch(() => {});
+    syncMyDataToGroup(cleanId, myMemberId, name.trim(), {
+      wants: Array.from(myList.want),
+      went: Array.from(myList.went),
+      favorites: Array.from(myList.favorites),
+      sakeWants: Array.from(myList.sakeWants),
+      memos: myList.memos,
+    }).catch(() => {});
     return true;
-  }, [myMemberId, myList.want]);
+  }, [myMemberId, myList]);
 
   const handleLeaveGroup = useCallback(() => {
     if (activeGroupId && isFirebaseConfigured()) {
