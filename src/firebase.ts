@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, onValue, remove, off, type DatabaseReference } from 'firebase/database';
+import { getDatabase, ref, set, onValue, remove, off, onDisconnect, type DatabaseReference } from 'firebase/database';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
 
@@ -82,10 +82,22 @@ export function subscribeToConnectionState(
   return () => off(connectedRef, 'value', unsubscribe);
 }
 
-/** Remove myself from a group */
+/** Remove a member from a group (myself or others) */
 export function leaveGroup(groupId: string, memberId: string): Promise<void> {
   const memberRef = ref(db, `groups/${groupId}/members/${memberId}`);
   return remove(memberRef);
+}
+
+/** Set up onDisconnect to auto-remove my data when connection is lost */
+export function setupOnDisconnect(groupId: string, memberId: string): void {
+  const memberRef = ref(db, `groups/${groupId}/members/${memberId}`);
+  onDisconnect(memberRef).remove();
+}
+
+/** Cancel onDisconnect (e.g. when manually leaving) */
+export function cancelOnDisconnect(groupId: string, memberId: string): void {
+  const memberRef = ref(db, `groups/${groupId}/members/${memberId}`);
+  onDisconnect(memberRef).cancel();
 }
 
 /** Check if Firebase is configured (not placeholder) */

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Search, Map as MapIcon, List, X, Heart, Check, Settings, Trash2, Send, Users, Copy, UserPlus, LogIn, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { boothData, sakeData, AppBrewery, AppSake } from './data';
-import { syncMyDataToGroup, subscribeToGroup, leaveGroup, getMyMemberId, isFirebaseConfigured, subscribeToConnectionState, type FirebaseGroupMember, type ConnectionStatus } from './firebase';
+import { syncMyDataToGroup, subscribeToGroup, leaveGroup, getMyMemberId, isFirebaseConfigured, subscribeToConnectionState, setupOnDisconnect, cancelOnDisconnect, type FirebaseGroupMember, type ConnectionStatus } from './firebase';
 
 // --- Types ---
 type Tag = '限定' | '有料' | '無料' | '新酒';
@@ -1225,7 +1225,7 @@ function SettingsView({ myList, clearMyList }: { myList: MyListState; clearMyLis
   );
 }
 
-function GroupView({ myList, groupMembers, activeGroupId, myName, joinGroup, leaveGroup: handleLeave, setMyName, connectionStatus, syncError }: { myList: MyListState; groupMembers: GroupMember[]; activeGroupId: string | null; myName: string; joinGroup: (groupId: string, name: string) => boolean; leaveGroup: () => void; setMyName: (name: string) => void; connectionStatus: ConnectionStatus; syncError: string | null }) {
+function GroupView({ myList, groupMembers, activeGroupId, myName, joinGroup, leaveGroup: handleLeave, setMyName, connectionStatus, syncError, removeMember }: { myList: MyListState; groupMembers: GroupMember[]; activeGroupId: string | null; myName: string; joinGroup: (groupId: string, name: string) => boolean; leaveGroup: () => void; setMyName: (name: string) => void; connectionStatus: ConnectionStatus; syncError: string | null; removeMember: (memberId: string) => void }) {
   const [inputGroupId, setInputGroupId] = useState('');
   const [inputName, setInputName] = useState(myName);
   const [error, setError] = useState('');
@@ -1350,7 +1350,13 @@ function GroupView({ myList, groupMembers, activeGroupId, myName, joinGroup, lea
                         <p className="text-sm font-medium truncate">{member.name}</p>
                         <p className="text-[10px] text-gray-400">{member.wants.length}蔵</p>
                       </div>
-                      <span className="w-2 h-2 rounded-full bg-emerald-400" title="オンライン" />
+                      <button
+                        onClick={() => removeMember(member.id)}
+                        className="shrink-0 p-1.5 rounded-full hover:bg-red-50 transition-colors"
+                        title="メンバーを削除"
+                      >
+                        <X className="w-3.5 h-3.5 text-gray-300 hover:text-red-400" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -1464,7 +1470,9 @@ export default function App() {
   useEffect(() => {
     if (!activeGroupId || !myName || !isFirebaseConfigured()) return;
     setSyncError(null);
-    syncMyDataToGroup(activeGroupId, myMemberId, myName, Array.from(myList.want)).catch((err) => {
+    syncMyDataToGroup(activeGroupId, myMemberId, myName, Array.from(myList.want)).then(() => {
+      setupOnDisconnect(activeGroupId, myMemberId);
+    }).catch((err) => {
       setSyncError('データの同期に失敗しました: ' + (err?.message || '不明なエラー'));
     });
   }, [activeGroupId, myMemberId, myName, myList.want]);
@@ -1506,6 +1514,7 @@ export default function App() {
 
   const handleLeaveGroup = useCallback(() => {
     if (activeGroupId && isFirebaseConfigured()) {
+      cancelOnDisconnect(activeGroupId, myMemberId);
       leaveGroup(activeGroupId, myMemberId).catch(() => {});
     }
     setActiveGroupId(null);
@@ -1513,6 +1522,11 @@ export default function App() {
     localStorage.removeItem('sakenojin-group-id');
     saveGroup([]);
   }, [activeGroupId, myMemberId]);
+
+  const removeMember = useCallback((memberId: string) => {
+    if (!activeGroupId || !isFirebaseConfigured()) return;
+    leaveGroup(activeGroupId, memberId).catch(() => {});
+  }, [activeGroupId]);
 
   useEffect(() => {
     const getMeta = (name: string) => document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`)?.content?.trim() ?? '';
@@ -1689,7 +1703,7 @@ export default function App() {
             )}
             {currentTab === 'group' && (
               <motion.div key="group" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
-                <GroupView myList={myList} groupMembers={groupMembers} activeGroupId={activeGroupId} myName={myName} joinGroup={joinGroup} leaveGroup={handleLeaveGroup} setMyName={(name: string) => { setMyNameState(name); localStorage.setItem('sakenojin-myname', name); }} connectionStatus={connectionStatus} syncError={syncError} />
+                <GroupView myList={myList} groupMembers={groupMembers} activeGroupId={activeGroupId} myName={myName} joinGroup={joinGroup} leaveGroup={handleLeaveGroup} setMyName={(name: string) => { setMyNameState(name); localStorage.setItem('sakenojin-myname', name); }} connectionStatus={connectionStatus} syncError={syncError} removeMember={removeMember} />
               </motion.div>
             )}
             {currentTab === 'settings' && (
