@@ -837,6 +837,29 @@ function MapView({ myList, toggleMyList, toggleFavorite, toggleSakeWant, updateM
                     <div className="text-center text-gray-500 py-4">出品酒データがありません</div>
                   )}
                 </div>
+                {/* Booth memo */}
+                <div className="mt-3 px-1 relative">
+                  <textarea
+                    id={`booth-memo-map-${selectedBrewery.boothNumber}`}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-3 pr-8 py-2 text-xs text-gray-700 resize-none focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-300 placeholder-gray-300"
+                    rows={2}
+                    placeholder="この酒蔵のメモ..."
+                    defaultValue={myList.memos[`booth:${selectedBrewery.boothNumber}`] || ''}
+                    onBlur={(e) => updateMemo(`booth:${selectedBrewery.boothNumber}`, e.target.value)}
+                  />
+                  <button
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 active:text-blue-500"
+                    onClick={() => {
+                      const el = document.getElementById(`booth-memo-map-${selectedBrewery.boothNumber}`) as HTMLTextAreaElement | null;
+                      if (el) {
+                        updateMemo(`booth:${selectedBrewery.boothNumber}`, el.value);
+                        el.blur();
+                      }
+                    }}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </motion.div>
           </>
