@@ -26,6 +26,7 @@ interface GroupMember {
   id: string;
   name: string;
   wants: string[]; // booth numbers
+  went?: string[];
   memos?: Record<string, string>;
 }
 
@@ -201,12 +202,19 @@ function MapView({ myList, toggleMyList, toggleFavorite, toggleSakeWant, updateM
   });
 
   const groupBoothMap = useMemo(() => {
-    const map = new Map<string, { names: string[]; colors: string[] }>();
+    const map = new Map<string, { wantNames: string[]; wentNames: string[]; colors: string[] }>();
     groupMembers.forEach((member, idx) => {
+      const color = memberColors[idx % memberColors.length];
       member.wants.forEach(boothNum => {
-        const entry = map.get(boothNum) || { names: [], colors: [] };
-        entry.names.push(member.name);
-        entry.colors.push(memberColors[idx % memberColors.length]);
+        const entry = map.get(boothNum) || { wantNames: [], wentNames: [], colors: [] };
+        entry.wantNames.push(member.name);
+        if (!entry.colors.includes(color)) entry.colors.push(color);
+        map.set(boothNum, entry);
+      });
+      (member.went || []).forEach(boothNum => {
+        const entry = map.get(boothNum) || { wantNames: [], wentNames: [], colors: [] };
+        entry.wentNames.push(member.name);
+        if (!entry.colors.includes(color)) entry.colors.push(color);
         map.set(boothNum, entry);
       });
     });
@@ -749,13 +757,25 @@ function MapView({ myList, toggleMyList, toggleFavorite, toggleSakeWant, updateM
                 </div>
                 {(() => {
                   const gInfo = selectedBrewery ? groupBoothMap.get(selectedBrewery.boothNumber) : undefined;
-                  if (!gInfo) return null;
+                  if (!gInfo || (gInfo.wantNames.length === 0 && gInfo.wentNames.length === 0)) return null;
                   return (
-                    <div className="mt-3 flex items-center gap-2 flex-wrap bg-orange-50 rounded-lg px-3 py-2 border border-orange-200">
-                      <Users className="w-4 h-4 text-orange-500 shrink-0" />
-                      <span className="text-xs font-bold text-orange-600">
-                        {gInfo.names.join('、')} も行きたい！
-                      </span>
+                    <div className="mt-3 space-y-1.5">
+                      {gInfo.wantNames.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap bg-orange-50 rounded-lg px-3 py-2 border border-orange-200">
+                          <Users className="w-4 h-4 text-orange-500 shrink-0" />
+                          <span className="text-xs font-bold text-orange-600">
+                            {gInfo.wantNames.join('、')} も行きたい！
+                          </span>
+                        </div>
+                      )}
+                      {gInfo.wentNames.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap bg-emerald-50 rounded-lg px-3 py-2 border border-emerald-200">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                          <span className="text-xs font-bold text-emerald-600">
+                            {gInfo.wentNames.join('、')} は飲んだ！
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -1016,6 +1036,7 @@ function MyListView({ myList, toggleMyList, onBreweryTap, groupMembers, activeGr
               <div className="h-px flex-1 bg-gray-300"></div>
             </div>
             {groupMembers.map((member, memberIdx) => {
+              const wentSet = new Set(member.went || []);
               const memberBoothData = member.wants.map(boothNum => {
                 const targetBoothNum = normalizeBooth(boothNum);
                 const boothInfo = boothData.find(b => normalizeBooth(b.booth_number) === targetBoothNum);
@@ -1024,6 +1045,7 @@ function MyListView({ myList, toggleMyList, onBreweryTap, groupMembers, activeGr
                   boothNumber: String(boothInfo.booth_number),
                   name: boothInfo.brewery_name || '',
                   color: boothInfo.color_code || '#cccccc',
+                  hasWent: wentSet.has(String(boothInfo.booth_number)),
                 };
               }).filter((x): x is NonNullable<typeof x> => x !== null);
 
@@ -1043,6 +1065,75 @@ function MyListView({ myList, toggleMyList, onBreweryTap, groupMembers, activeGr
                   ) : (
                     <div className="space-y-1.5 pl-8">
                       {memberBoothData.map((booth) => {
+                        const memo = member.memos?.[`booth:${booth.boothNumber}`];
+                        return (
+                          <button
+                            key={booth.boothNumber}
+                            className="flex items-center gap-1.5 bg-white rounded-lg px-2.5 py-1.5 shadow-sm border border-gray-200/60 active:bg-gray-50 w-full text-left"
+                            onClick={() => onBreweryTap(booth.boothNumber)}
+                          >
+                            <div
+                              className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0 relative"
+                              style={{ backgroundColor: booth.color }}
+                            >
+                              {booth.boothNumber}
+                              {booth.hasWent && (
+                                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full flex items-center justify-center">
+                                  <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-xs font-medium text-gray-700">{booth.name}</span>
+                              {memo && <p className="text-[10px] text-gray-400 truncate">{memo}</p>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Group members' went lists */}
+        {activeTab === 'went' && activeGroupId && groupMembers.length > 0 && (
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-gray-300"></div>
+              <span className="text-xs text-gray-500 font-medium shrink-0">メンバーの飲んだリスト</span>
+              <div className="h-px flex-1 bg-gray-300"></div>
+            </div>
+            {groupMembers.map((member, memberIdx) => {
+              const memberWentData = (member.went || []).map(boothNum => {
+                const targetBoothNum = normalizeBooth(boothNum);
+                const boothInfo = boothData.find(b => normalizeBooth(b.booth_number) === targetBoothNum);
+                if (!boothInfo) return null;
+                return {
+                  boothNumber: String(boothInfo.booth_number),
+                  name: boothInfo.brewery_name || '',
+                  color: boothInfo.color_code || '#cccccc',
+                };
+              }).filter((x): x is NonNullable<typeof x> => x !== null);
+
+              const color = memberColors[memberIdx % memberColors.length];
+
+              return (
+                <div key={member.id} className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: color }}>
+                      {member.name.charAt(0)}
+                    </div>
+                    <span className="text-sm font-bold text-gray-700">{member.name}</span>
+                    <span className="text-xs text-gray-400">({memberWentData.length}蔵)</span>
+                  </div>
+                  {memberWentData.length === 0 ? (
+                    <p className="text-xs text-gray-400 pl-8">まだ飲んでいません</p>
+                  ) : (
+                    <div className="space-y-1.5 pl-8">
+                      {memberWentData.map((booth) => {
                         const memo = member.memos?.[`booth:${booth.boothNumber}`];
                         return (
                           <button
@@ -1589,6 +1680,7 @@ export default function App() {
           id,
           name: (data as FirebaseGroupMember).name,
           wants: (data as FirebaseGroupMember).wants || [],
+          went: (data as FirebaseGroupMember).went || [],
           memos: (data as FirebaseGroupMember).memos || {},
         }));
       setGroupMembers(otherMembers);
