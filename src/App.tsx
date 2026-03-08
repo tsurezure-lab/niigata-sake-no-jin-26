@@ -634,9 +634,12 @@ function MapView({ myList, toggleMyList, toggleFavorite, toggleSakeWant, updateM
                           </span>
                         )}
                         {!isPlaceholder && groupBoothMap.has(String(cell.booth_number)) && (
-                          <span className="absolute bottom-0 right-0 flex items-center justify-center w-[40%] h-[40%] bg-blue-500 rounded-full drop-shadow-sm">
-                            <Users className="w-[65%] h-[65%] text-white" strokeWidth={2.5} />
-                          </span>
+                          <>
+                            <span className="absolute inset-0 rounded ring-2 ring-orange-400 pointer-events-none" style={{ boxShadow: '0 0 6px 1px rgba(251,146,60,0.5)' }} />
+                            <span className="absolute bottom-0 right-0 flex items-center justify-center w-[40%] h-[40%] bg-orange-500 rounded-full drop-shadow-sm">
+                              <Users className="w-[65%] h-[65%] text-white" strokeWidth={2.5} />
+                            </span>
+                          </>
                         )}
                         <span className="text-center leading-[0.92] whitespace-nowrap inline-block" style={{ fontSize: 'clamp(7.6px, 2.66vw, 12.35px)' }}>
                           {boothLabel.line1}
@@ -748,9 +751,9 @@ function MapView({ myList, toggleMyList, toggleFavorite, toggleSakeWant, updateM
                   const gInfo = selectedBrewery ? groupBoothMap.get(selectedBrewery.boothNumber) : undefined;
                   if (!gInfo) return null;
                   return (
-                    <div className="mt-3 flex items-center gap-2 flex-wrap">
-                      <Users className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                      <span className="text-xs text-blue-600">
+                    <div className="mt-3 flex items-center gap-2 flex-wrap bg-orange-50 rounded-lg px-3 py-2 border border-orange-200">
+                      <Users className="w-4 h-4 text-orange-500 shrink-0" />
+                      <span className="text-xs font-bold text-orange-600">
                         {gInfo.names.join('、')} も行きたい！
                       </span>
                     </div>
