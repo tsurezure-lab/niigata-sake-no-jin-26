@@ -689,7 +689,7 @@ function MapView({ myList, toggleMyList, toggleFavorite, toggleSakeWant, updateM
           ))}
         </div>
         <p className="text-center text-[11px] text-gray-500 mt-2 mb-1">
-          制作: 徒然研究室 Tsurezure Lab
+          原作: <a href="https://github.com/tsurezure-lab/niigata-sake-no-jin-26" target="_blank" rel="noopener noreferrer" className="underline">徒然研究室</a> ／ フォーク版
         </p>
 
       </div>
@@ -1386,7 +1386,7 @@ function SettingsView({ myList, clearMyList }: { myList: MyListState; clearMyLis
           </div>
           <div className="border-t border-gray-200 pt-3">
             <p className="font-bold text-gray-600 text-xs mb-1">⚠️ ご注意</p>
-            <p>本サイトは徒然研究室（X: <a href="https://x.com/tsurezure_lab" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">@tsurezure_lab</a>）が個人的に作成した非公式の出品酒マップです。にいがた酒の陣実行委員会とは一切関係ありません。掲載内容に誤りがある場合があります。正確な情報は公式サイト・会場配布資料をご確認ください。</p>
+            <p>本サイトは<a href="https://github.com/tsurezure-lab/niigata-sake-no-jin-26" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">徒然研究室（@tsurezure_lab）のオリジナル</a>をフォーク（複製・改変）して作成した非公式の出品酒マップです。にいがた酒の陣実行委員会とは一切関係ありません。掲載内容に誤りがある場合があります。正確な情報は公式サイト・会場配布資料をご確認ください。</p>
           </div>
           <div className="border-t border-gray-200 pt-3">
             <p className="font-bold text-gray-600 text-xs mb-1">🔒 プライバシー</p>
